@@ -22,7 +22,7 @@ import argparse;
 import json;
 import os;
 import re;
-import requests;
+import urllib.request;
 import subprocess as sp;
 import sys;
 
@@ -40,34 +40,34 @@ def main():
     resource = "/HPImageArchive.aspx?format=js&mkt=en-IN&n=1";
 
     try:
-        response = requests.get(domain + resource);
+        with urllib.request.urlopen(domain + resource) as response:
+            if(response):
+                data = json.loads(response.read());
+            else:
+                print("\x1B[32mget_wallpaper \x1B[31mError:\x1B[0m " +\
+                "Unable to fetch image of day.", file=sys.stderr);
+                return;
     except Exception as err:
         print("\x1B[32mget_wallpaper \x1B[31mError:\x1B[0m " +\
         "Unable to fetch image of day.", file=sys.stderr);
         print(str(err), file=sys.stderr);
-        return;
-    if(response.status_code == 200):
-        data = json.loads(response.text);
-    else:
-        print("\x1B[32mget_wallpaper \x1B[31mError:\x1B[0m " +\
-        "Unable to fetch image of day.", file=sys.stderr);
         return;
 
     try:
-        response = requests.get(domain + data["images"][0]["url"],\
-        stream=True);
+        with urllib.request.urlopen(domain +\
+        data["images"][0]["url"]) as response:
+            if(response):
+                with open("wallpaper.jpg", "wb") as fp:
+                    for chunk in response:
+                        fp.write(chunk);
+            else:
+                print("\x1B[32mget_wallpaper \x1B[31mError:\x1B[0m " +\
+                "Unable to fetch image of day.", file=sys.stderr);
+                return;
     except Exception as err:
         print("\x1B[32mget_wallpaper \x1B[31mError:\x1B[0m " +\
         "Unable to fetch image of day.", file=sys.stderr);
         print(str(err), file=sys.stderr);
-        return;
-    if(response.status_code == 200):
-        with open("wallpaper.jpg", "wb") as fp:
-            for chunk in response:
-                fp.write(chunk);
-    else:
-        print("\x1B[32mget_wallpaper \x1B[31mError:\x1B[0m " +\
-        "Unable to fetch image of day.", file=sys.stderr);
         return;
 
     if(re.search(r"gnome", os.environ["DESKTOP_SESSION"].lower()) or\
@@ -75,6 +75,27 @@ def main():
     re.search(r"gnome", os.environ["XDG_CURRENT_DESKTOP"].lower())):
         sp.run("gsettings set org.gnome.desktop.background " +\
         "picture-uri file://" + os.getcwd() + "/wallpaper.jpg",
+        shell=True);
+    elif(re.search(r"xfce", os.environ["DESKTOP_SESSION"].lower()) or\
+    re.search(r"xfce", os.environ["XDG_SESSION_DESKTOP"].lower()) or\
+    re.search(r"xfce", os.environ["XDG_CURRENT_DESKTOP"].lower())):
+        sp.run("for setting in $(xfconf-query -c xfce4-desktop -l " +\
+        "| grep \"last-image\"); do xfconf-query -c xfce4-desktop " +\
+        "-p $setting -s " + os.getcwd() + "/wallpaper.jpg; done",\
+        shell=True);
+    elif(re.search(r"kde", os.environ["DESKTOP_SESSION"].lower()) or\
+    re.search(r"kde", os.environ["XDG_SESSION_DESKTOP"].lower()) or\
+    re.search(r"kde", os.environ["XDG_CURRENT_DESKTOP"].lower())):
+        sp.run("qdbus org.kde.plasmashell /PlasmaShell " +\
+        "org.kde.PlasmaShell.evaluateScript " +\
+        "'var allDesktops = desktops();" +\
+        "for (i=0;i<allDesktops.length;i++) {" +\
+        "d = allDesktops[i];" +\
+        "d.wallpaperPlugin = \"org.kde.image\";" +\
+        "d.currentConfigGroup = Array(\"Wallpaper\", " +\
+        "\"org.kde.image\", \"General\");" +\
+        "d.writeConfig(\"Image\", \"file://" +\
+        os.getcwd() + "/wallpaper.jpg" + "\")}'",\
         shell=True);
     else:
         print("\x1B[32mget_wallpaper \x1B[31mError:\x1B[0m " +\
